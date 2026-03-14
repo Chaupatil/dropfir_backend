@@ -80,17 +80,20 @@ app.get("/api/today", async (req, res) => {
 // POST /api/water — add water entry
 app.post("/api/water", async (req, res) => {
   try {
-    const { ml } = req.body;
+    const { ml, id, time } = req.body;
     if (!ml || ml <= 0)
       return res.status(400).json({ error: "Invalid ml value" });
 
+    // ✅ Use the id sent by the frontend so DELETE will match
     const entry = {
-      id: new ObjectId().toString(),
+      id: id ? String(id) : new ObjectId().toString(),
       ml: Number(ml),
-      time: new Date().toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      time:
+        time ||
+        new Date().toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
       createdAt: new Date(),
     };
 
@@ -121,14 +124,15 @@ app.post("/api/water", async (req, res) => {
 app.delete("/api/water/:id", async (req, res) => {
   try {
     const date = getToday();
-    await col.updateOne(
+    const result = await col.updateOne(
       { userId: DEFAULT_USER, date },
       {
+        // ✅ Match by string id (same as what the frontend sent on POST)
         $pull: { water: { id: req.params.id } },
         $set: { updatedAt: new Date() },
       },
     );
-    res.json({ success: true });
+    res.json({ success: true, modified: result.modifiedCount });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -137,19 +141,22 @@ app.delete("/api/water/:id", async (req, res) => {
 // POST /api/exercise — add exercise
 app.post("/api/exercise", async (req, res) => {
   try {
-    const { type, duration, calories } = req.body;
+    const { type, duration, calories, id, time } = req.body;
     if (!type || !duration)
       return res.status(400).json({ error: "Missing fields" });
 
+    // ✅ Use the id sent by the frontend so DELETE will match
     const entry = {
-      id: new ObjectId().toString(),
+      id: id ? String(id) : new ObjectId().toString(),
       type,
       duration: Number(duration),
       calories: Number(calories) || 0,
-      time: new Date().toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      time:
+        time ||
+        new Date().toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
       createdAt: new Date(),
     };
 
@@ -180,14 +187,15 @@ app.post("/api/exercise", async (req, res) => {
 app.delete("/api/exercise/:id", async (req, res) => {
   try {
     const date = getToday();
-    await col.updateOne(
+    const result = await col.updateOne(
       { userId: DEFAULT_USER, date },
       {
+        // ✅ Match by string id (same as what the frontend sent on POST)
         $pull: { exercises: { id: req.params.id } },
         $set: { updatedAt: new Date() },
       },
     );
-    res.json({ success: true });
+    res.json({ success: true, modified: result.modifiedCount });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -200,7 +208,16 @@ app.patch("/api/settings", async (req, res) => {
     const date = getToday();
     await col.updateOne(
       { userId: DEFAULT_USER, date },
-      { $set: { waterGoal: Number(waterGoal), updatedAt: new Date() } },
+      {
+        $set: { waterGoal: Number(waterGoal), updatedAt: new Date() },
+        $setOnInsert: {
+          userId: DEFAULT_USER,
+          date,
+          water: [],
+          exercises: [],
+          createdAt: new Date(),
+        },
+      },
       { upsert: true },
     );
     res.json({ success: true });
@@ -252,9 +269,14 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-// Health check
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", db: !!db, timestamp: new Date() });
+// ✅ Fixed health check — does a real ping instead of just checking if db object exists
+app.get("/api/health", async (req, res) => {
+  try {
+    await db.command({ ping: 1 });
+    res.json({ status: "ok", db: true, timestamp: new Date() });
+  } catch (err) {
+    res.json({ status: "ok", db: false, timestamp: new Date() });
+  }
 });
 
 // ─── Start ────────────────────────────────────────────────────
