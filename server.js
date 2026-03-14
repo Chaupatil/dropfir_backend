@@ -301,6 +301,20 @@ app.delete("/api/meal/:id", async (req, res) => {
   }
 });
 
+// PATCH /api/meal/:id/comment — update comment on a meal
+app.patch("/api/meal/:id/comment", async (req, res) => {
+  try {
+    const { comment } = req.body;
+    const result = await mealCol.updateOne(
+      { userId: DEFAULT_USER, clientId: req.params.id },
+      { $set: { comment: String(comment || "").slice(0, 500) } },
+    );
+    res.json({ success: true, modified: result.modifiedCount });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/meals?date=YYYY-MM-DD — get meals for a specific date (optional, defaults to today)
 app.get("/api/meals", async (req, res) => {
   try {
